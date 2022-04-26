@@ -15,9 +15,9 @@
 &spi3 {
 	compatible = "nordic,nrf-spim";
 	status = "okay";
-	sck-pin = <13>;
-	mosi-pin = <11>;
-	miso-pin = <12>;
+	pinctrl-0 = <&spi3_default>;
+	pinctrl-1 = <&spi3_sleep>;
+	pinctrl-names = "default", "sleep";
 	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
 	mx25r64: mx25r6435f@0 {
 		compatible = "jedec,spi-nor";
