@@ -304,9 +304,13 @@ int rpu_clks_on(void)
 int rpu_enable(void)
 {
 	rpu_gpio_config();
+	k_msleep(5);
 	rpu_pwron();
+	k_msleep(5);
 	rpu_qspi_init();
+	k_msleep(5);
 	rpu_wakeup();
+	k_msleep(5);
 	rpu_clks_on();
 
 	return 0;

@@ -31,6 +31,8 @@ manifest:
       url-base: https://github.com/NordicSemiconductor
     - name: memfault
       url-base: https://github.com/memfault
+    - name: markaj-nordic
+      url-base: https://github.com/markaj-nordic
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -100,7 +102,8 @@ manifest:
     # changes.
     - name: sdk-hostap
       path: modules/lib/hostap
-      revision: bf7be5627d2fa528bd61ce1ff10d89828a4d4697
+      remote: markaj-nordic
+      revision: 07193730fed1581c59a8dfbecd20d1625ffedc91
     - name: mcuboot
       repo-path: sdk-mcuboot
       revision: v1.9.99-ncs1
