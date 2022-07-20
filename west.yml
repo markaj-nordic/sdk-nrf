@@ -103,7 +103,7 @@ manifest:
     - name: sdk-hostap
       path: modules/lib/hostap
       remote: markaj-nordic
-      revision: 07193730fed1581c59a8dfbecd20d1625ffedc91
+      revision: c0d0ce868e64f95081cc36aa4e6aa12fda6af060
     - name: mcuboot
       repo-path: sdk-mcuboot
       revision: v1.9.99-ncs1
