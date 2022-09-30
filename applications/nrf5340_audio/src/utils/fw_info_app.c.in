@@ -6,7 +6,7 @@
 
 #include "fw_info_app.h"
 
-#include <zephyr.h>
+#include <zephyr/kernel.h>
 #include <stdio.h>
 #include <logging/log_ctrl.h>
 #include "channel_assignment.h"
