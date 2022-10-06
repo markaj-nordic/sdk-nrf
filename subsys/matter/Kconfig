@@ -7,3 +7,4 @@
 config CHIP
 	bool
 	select EXPERIMENTAL
+	imply LEGACY_INCLUDE_PATH
