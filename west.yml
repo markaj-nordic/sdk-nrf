@@ -33,6 +33,8 @@ manifest:
       url-base: https://github.com/memfault
     - name: ant-nrfconnect
       url-base: https://github.com/ant-nrfconnect
+    - name: markaj-nordic
+      url-base: https://github.com/markaj-nordic
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -52,7 +54,7 @@ manifest:
     # https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/guides/modules.html
     - name: zephyr
       repo-path: sdk-zephyr
-      revision: 5cef595fdb172639d9c5730023e8517e250523bc
+      revision: pull/955/head
       import:
         # In addition to the zephyr repository itself, NCS also
         # imports the contents of zephyr/west.yml at the above
@@ -126,8 +128,9 @@ manifest:
       revision: v1.7.2-ncs2
     - name: matter
       repo-path: sdk-connectedhomeip
+      remote: markaj-nordic
       path: modules/lib/matter
-      revision: eca96c021254c42abf9827aa8c958570316fd41e
+      revision: a73c2a4b6055c50cce92cd3160697c1a609342a7
       submodules:
         - name: nlio
           path: third_party/nlio/repo
