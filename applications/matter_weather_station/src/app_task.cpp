@@ -31,8 +31,8 @@
 
 #include <dk_buttons_and_leds.h>
 #include <zephyr/drivers/sensor.h>
-#include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
 using namespace ::chip;
 using namespace ::chip::Credentials;
@@ -647,7 +647,7 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 		sIsThreadEnabled = ConnectivityMgr().IsThreadEnabled();
 		UpdateStatusLED();
 		break;
-	case DeviceEventType::kDnssdPlatformInitialized:
+	case DeviceEventType::kDnssdInitialized:
 #if CONFIG_CHIP_OTA_REQUESTOR
 		InitBasicOTARequestor();
 #endif
