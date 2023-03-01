@@ -6,17 +6,25 @@
 
 mainmenu "Matter Lock sample application"
 
-config LOCK_NUM_USERS
+config LOCK_MAX_NUM_USERS
 	int "Maximum number of users supported by lock"
-	default 10
+	default 5
 
 config LOCK_NUM_CREDENTIALS
 	int "Maximum number of credentials supported by lock"
-	default 20
+	default 60
 
 config LOCK_NUM_CREDENTIALS_PER_USER
-	int "Maximum number of credentials per user supported by lock"
-	default 3
+	int "Maximum number of credentials of given type per one user supported by lock"
+	default 2
+
+config LOCK_NUM_CREDENTIALS_TYPE
+	int "Maximum number of credentials of given type"
+	default 2
+
+config LOCK_TOTAL_NUM_CREDENTIALS_PER_USER
+	int "Maximum number of credentials per one user supported by lock"
+	default 6
 
 config STATE_LEDS
 	bool "Use LEDs to indicate the device state"

@@ -102,21 +102,53 @@ void emberAfDoorLockClusterInitCallback(EndpointId endpoint)
 	};
 
 	logOnFailure(DoorLock::Attributes::LockType::Set(endpoint, DlLockType::kDeadBolt), "type");
-	logOnFailure(DoorLock::Attributes::NumberOfTotalUsersSupported::Set(endpoint, CONFIG_LOCK_NUM_USERS),
+	logOnFailure(DoorLock::Attributes::NumberOfTotalUsersSupported::Set(endpoint, CONFIG_LOCK_MAX_NUM_USERS),
 		     "number of users");
-	logOnFailure(DoorLock::Attributes::NumberOfPINUsersSupported::Set(endpoint, CONFIG_LOCK_NUM_USERS),
+	logOnFailure(DoorLock::Attributes::NumberOfPINUsersSupported::Set(endpoint, CONFIG_LOCK_NUM_CREDENTIALS_TYPE),
 		     "number of PIN users");
-	logOnFailure(DoorLock::Attributes::NumberOfRFIDUsersSupported::Set(endpoint, 0), "number of RFID users");
+	logOnFailure(DoorLock::Attributes::NumberOfRFIDUsersSupported::Set(endpoint, CONFIG_LOCK_NUM_CREDENTIALS_TYPE),
+		     "number of RFID users");
 	logOnFailure(DoorLock::Attributes::NumberOfCredentialsSupportedPerUser::Set(
-			     endpoint, CONFIG_LOCK_NUM_CREDENTIALS_PER_USER),
+			     endpoint, CONFIG_LOCK_TOTAL_NUM_CREDENTIALS_PER_USER),
 		     "number of credentials per user");
 
-	/*
-	 * Set FeatureMap to (kUser|kPinCredential), default is:
-	 * (kUser|kAccessSchedules|kRfidCredential|kPinCredential) 0x113
-	 */
-	logOnFailure(DoorLock::Attributes::FeatureMap::Set(endpoint, 0x101), "feature map");
+	/* Set FeatureMap to (kUser|kCredentialsOverTheAirAccess|kFingerCredentials|kRfidCredential|kPinCredential|) */
+	logOnFailure(DoorLock::Attributes::FeatureMap::Set(endpoint, 0x187), "feature map");
 
 	AppTask::Instance().UpdateClusterState(BoltLockMgr().GetState(),
 					       BoltLockManager::OperationSource::kUnspecified);
+}
+
+bool emberAfPluginDoorLockGetNumberOfFingerprintCredentialsSupported(chip::EndpointId endpointId,
+								     uint16_t &maxNumberOfCredentials)
+{
+	maxNumberOfCredentials = CONFIG_LOCK_NUM_CREDENTIALS_TYPE;
+	return true;
+}
+
+bool emberAfPluginDoorLockGetNumberOfFingerVeinCredentialsSupported(chip::EndpointId endpointId,
+								    uint16_t &maxNumberOfCredentials)
+{
+	maxNumberOfCredentials = CONFIG_LOCK_NUM_CREDENTIALS_TYPE;
+	return true;
+}
+
+bool emberAfPluginDoorLockGetFingerprintCredentialLengthConstraints(chip::EndpointId endpointId, uint8_t &minLen,
+								    uint8_t &maxLen)
+{
+	static constexpr uint8_t sDefaultMinLen{ 10 };
+	static constexpr uint8_t sDefaultMaxLen{ 30 };
+	minLen = sDefaultMinLen;
+	maxLen = sDefaultMaxLen;
+	return true;
+}
+
+bool emberAfPluginDoorLockGetFingerVeinCredentialLengthConstraints(chip::EndpointId endpointId, uint8_t &minLen,
+								   uint8_t &maxLen)
+{
+	static constexpr uint8_t sDefaultMinLen{ 10 };
+	static constexpr uint8_t sDefaultMaxLen{ 30 };
+	minLen = sDefaultMinLen;
+	maxLen = sDefaultMaxLen;
+	return true;
 }

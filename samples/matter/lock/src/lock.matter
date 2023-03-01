@@ -1474,15 +1474,14 @@ server cluster DoorLock = 257 {
   readonly attribute int16u numberOfRFIDUsersSupported = 19;
   readonly attribute int8u maxPINCodeLength = 23;
   readonly attribute int8u minPINCodeLength = 24;
+  readonly attribute int8u maxRFIDCodeLength = 25;
+  readonly attribute int8u minRFIDCodeLength = 26;
   readonly attribute DlCredentialRuleMask credentialRulesSupport = 27;
   readonly attribute int8u numberOfCredentialsSupportedPerUser = 28;
-  attribute access(write: manage) char_string<3> language = 33;
   attribute access(write: manage) int32u autoRelockTime = 35;
-  attribute access(write: manage) int8u soundVolume = 36;
   attribute access(write: manage) OperatingModeEnum operatingMode = 37;
   readonly attribute DlSupportedOperatingModes supportedOperatingModes = 38;
   attribute access(write: manage) boolean enableOneTouchLocking = 41;
-  attribute access(write: manage) boolean enablePrivacyModeButton = 43;
   attribute access(write: administer) int8u wrongCodeEntryLimit = 48;
   attribute access(write: administer) int8u userCodeTemporaryDisableTime = 49;
   attribute access(write: administer) boolean requirePINforRemoteOperation = 51;
@@ -1862,22 +1861,21 @@ endpoint 1 {
     ram      attribute numberOfRFIDUsersSupported;
     ram      attribute maxPINCodeLength default = 8;
     ram      attribute minPINCodeLength default = 6;
+    ram      attribute maxRFIDCodeLength default = 20;
+    ram      attribute minRFIDCodeLength default = 10;
     ram      attribute credentialRulesSupport default = 1;
     ram      attribute numberOfCredentialsSupportedPerUser default = 5;
-    ram      attribute language default = "en";
     ram      attribute autoRelockTime;
-    ram      attribute soundVolume;
     ram      attribute operatingMode;
     ram      attribute supportedOperatingModes default = 0xFFF6;
     ram      attribute enableOneTouchLocking;
-    ram      attribute enablePrivacyModeButton;
     ram      attribute wrongCodeEntryLimit default = 3;
     ram      attribute userCodeTemporaryDisableTime default = 10;
     ram      attribute requirePINforRemoteOperation;
     callback attribute generatedCommandList;
     callback attribute acceptedCommandList;
     callback attribute attributeList;
-    ram      attribute featureMap default = 0x101;
+    ram      attribute featureMap default = 0x187;
     ram      attribute clusterRevision default = 6;
   }
 }
