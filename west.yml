@@ -33,6 +33,8 @@ manifest:
       url-base: https://github.com/memfault
     - name: ant-nrfconnect
       url-base: https://github.com/ant-nrfconnect
+    - name: matter-sve
+      url-base: https://github.com/markaj-nordic
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -120,9 +122,10 @@ manifest:
       path: modules/tee/tf-m/trusted-firmware-m
       revision: v1.6.0-ncs3
     - name: matter
+      remote: matter-sve
       repo-path: sdk-connectedhomeip
       path: modules/lib/matter
-      revision: v2.3.0
+      revision: 5173782dd0fc175b477059c93bcb4443063e9fcf
       submodules:
         - name: nlio
           path: third_party/nlio/repo
