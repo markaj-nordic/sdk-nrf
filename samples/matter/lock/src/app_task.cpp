@@ -5,11 +5,15 @@
  */
 
 #include "app_task.h"
+#include "app_event.h"
+#include "task_executor.h"
 
-#include "app_config.h"
 #include "bolt_lock_manager.h"
 #include "fabric_table_delegate.h"
-#include "led_util.h"
+
+#ifdef CONFIG_MCUMGR_TRANSPORT_BT
+#include "dfu_over_smp.h"
+#endif
 
 #ifdef CONFIG_THREAD_WIFI_SWITCHING
 #include "software_images_swapper.h"
@@ -27,7 +31,6 @@ using chip::Shell::shell_command_t;
 
 #include <platform/CHIPDeviceLayer.h>
 
-#include "board_util.h"
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/clusters/door-lock-server/door-lock-server.h>
 #include <app/clusters/identify-server/identify-server.h>
@@ -48,7 +51,6 @@ using chip::Shell::shell_command_t;
 #include "ota_util.h"
 #endif
 
-#include <dk_buttons_and_leds.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
@@ -67,13 +69,7 @@ using namespace ::chip::DeviceLayer;
 
 namespace
 {
-constexpr uint32_t kFactoryResetTriggerTimeout = 3000;
-constexpr uint32_t kFactoryResetCancelWindowTimeout = 3000;
-constexpr size_t kAppEventQueueSize = 10;
 constexpr EndpointId kLockEndpointId = 1;
-#if NUMBER_OF_BUTTONS == 2
-constexpr uint32_t kAdvertisingTriggerTimeout = 3000;
-#endif
 
 #ifdef CONFIG_CHIP_NUS
 constexpr uint16_t kAdvertisingIntervalMin = 400;
@@ -81,47 +77,14 @@ constexpr uint16_t kAdvertisingIntervalMax = 500;
 constexpr uint8_t kLockNUSPriority = 2;
 #endif
 
-K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
-k_timer sFunctionTimer;
-
 #ifdef CONFIG_THREAD_WIFI_SWITCHING
 k_timer sSwitchImagesTimer;
 constexpr uint32_t kSwitchImagesTimeout = 10000;
 #endif
+} /* namespace */
 
 Identify sIdentify = { kLockEndpointId, AppTask::IdentifyStartHandler, AppTask::IdentifyStopHandler,
 		       Clusters::Identify::IdentifyTypeEnum::kVisibleIndicator };
-
-LEDWidget sStatusLED;
-LEDWidget sLockLED;
-#if NUMBER_OF_LEDS == 4
-FactoryResetLEDsWrapper<2> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED, FACTORY_RESET_SIGNAL_LED1 } };
-#endif
-
-bool sIsNetworkProvisioned = false;
-bool sIsNetworkEnabled = false;
-bool sHaveBLEConnections = false;
-} /* namespace */
-
-namespace LedConsts
-{
-constexpr uint32_t kBlinkRate_ms{ 500 };
-constexpr uint32_t kIdentifyBlinkRate_ms{ 500 };
-namespace StatusLed
-{
-	namespace Unprovisioned
-	{
-		constexpr uint32_t kOn_ms{ 100 };
-		constexpr uint32_t kOff_ms{ kOn_ms };
-	} /* namespace Unprovisioned */
-	namespace Provisioned
-	{
-		constexpr uint32_t kOn_ms{ 50 };
-		constexpr uint32_t kOff_ms{ 950 };
-	} /* namespace Provisioned */
-
-} /* namespace StatusLed */
-} /* namespace LedConsts */
 
 #ifdef CONFIG_CHIP_WIFI
 app::Clusters::NetworkCommissioning::Instance
@@ -168,26 +131,10 @@ CHIP_ERROR AppTask::Init()
 	return CHIP_ERROR_INTERNAL;
 #endif /* CONFIG_NET_L2_OPENTHREAD */
 
-	/* Initialize LEDs */
-	LEDWidget::InitGpio();
-	LEDWidget::SetStateUpdateCallback(LEDStateUpdateHandler);
-
-	sStatusLED.Init(SYSTEM_STATE_LED);
-	sLockLED.Init(LOCK_STATE_LED);
-	sLockLED.Set(BoltLockMgr().IsLocked());
-
-	UpdateStatusLED();
-
-	/* Initialize buttons */
-	int ret = dk_buttons_init(ButtonEventHandler);
-	if (ret) {
-		LOG_ERR("dk_buttons_init() failed");
-		return chip::System::MapErrorZephyr(ret);
+	if (!GetBoard().Init(ButtonEventHandler)) {
+		LOG_ERR("User interface initialization failed.");
+		return CHIP_ERROR_INCORRECT_STATE;
 	}
-
-	/* Initialize function timer */
-	k_timer_init(&sFunctionTimer, &AppTask::FunctionTimerTimeoutCallback, nullptr);
-	k_timer_user_data_set(&sFunctionTimer, this);
 
 #ifdef CONFIG_THREAD_WIFI_SWITCHING
 	k_timer_init(&sSwitchImagesTimer, &AppTask::SwitchImagesTimerTimeoutCallback, nullptr);
@@ -200,7 +147,7 @@ CHIP_ERROR AppTask::Init()
 	}
 	GetNUSService().RegisterCommand("Lock", sizeof("Lock"), NUSLockCallback, nullptr);
 	GetNUSService().RegisterCommand("Unlock", sizeof("Unlock"), NUSUnlockCallback, nullptr);
-	if(!GetNUSService().StartServer()){
+	if (!GetNUSService().StartServer()) {
 		LOG_ERR("GetNUSService().StartServer() failed");
 	}
 #endif
@@ -262,11 +209,8 @@ CHIP_ERROR AppTask::StartApp()
 {
 	ReturnErrorOnFailure(Init());
 
-	AppEvent event = {};
-
 	while (true) {
-		k_msgq_get(&sAppEventQueue, &event, K_FOREVER);
-		DispatchEvent(event);
+		TaskExecutor::DispatchNextTask();
 	}
 
 	return CHIP_NO_ERROR;
@@ -274,43 +218,39 @@ CHIP_ERROR AppTask::StartApp()
 
 void AppTask::IdentifyStartHandler(Identify *)
 {
-	AppEvent event;
-	event.Type = AppEventType::IdentifyStart;
-	event.Handler = [](const AppEvent &) { sLockLED.Blink(LedConsts::kIdentifyBlinkRate_ms); };
-	PostEvent(event);
+	TaskExecutor::PostTask([] { GetBoard().GetLED(DeviceLeds::kAppLED).Blink(LedConsts::kIdentifyBlinkRate_ms); });
 }
 
 void AppTask::IdentifyStopHandler(Identify *)
 {
-	AppEvent event;
-	event.Type = AppEventType::IdentifyStop;
-	event.Handler = [](const AppEvent &) { sLockLED.Set(BoltLockMgr().IsLocked()); };
-	PostEvent(event);
+	TaskExecutor::PostTask([] { GetBoard().GetLED(DeviceLeds::kAppLED).Set(BoltLockMgr().IsLocked()); });
 }
 
-#if NUMBER_OF_BUTTONS == 2
-void AppTask::StartBLEAdvertisementAndLockActionEventHandler(const AppEvent &event)
+void AppTask::ButtonEventHandler(ButtonState state, ButtonMask hasChanged)
 {
-	if (event.ButtonEvent.Action == static_cast<uint8_t>(AppEventType::ButtonPushed)) {
-		Instance().StartTimer(kAdvertisingTriggerTimeout);
-		Instance().mFunction = FunctionEvent::AdvertisingStart;
-	} else {
-		if (Instance().mFunction == FunctionEvent::AdvertisingStart && Instance().mFunctionTimerActive) {
-			Instance().CancelTimer();
-			Instance().mFunction = FunctionEvent::NoneSelected;
-
-			AppEvent button_event;
-			button_event.Type = AppEventType::Button;
-			button_event.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_AND_LOCK_BUTTON;
-			button_event.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
-			button_event.Handler = LockActionEventHandler;
-			PostEvent(button_event);
-		}
+	if ((APPLICATION_BUTTON_MASK & hasChanged) & state) {
+		TaskExecutor::PostTask([] { LockActionEventHandler(); });
 	}
-}
+
+#ifdef CONFIG_THREAD_WIFI_SWITCHING
+	if (USER_BUTTON_1_MASK & hasChanged) {
+		AppEvent event(AppEventType::ThreadWiFiSwitch);
+		event.ThreadWiFiSwitchEvent.ButtonAction =
+			(FUNCTION_BUTTON_MASK & state) ? SwitchButtonAction::Pressed : SwitchButtonAction::Released;
+		TaskExecutor::PostTask([event] { SwitchImagesTriggerHandler(event); });
+	}
 #endif
 
-void AppTask::LockActionEventHandler(const AppEvent &event)
+	if (FUNCTION_BUTTON_MASK & hasChanged & state) {
+#ifdef CONFIG_MCUMGR_TRANSPORT_BT
+		GetDFUOverSMP().StartServer();
+#else
+		LOG_INF("Software update is disabled");
+#endif
+	}
+}
+
+void AppTask::LockActionEventHandler()
 {
 	if (BoltLockMgr().IsLocked()) {
 		BoltLockMgr().Unlock(BoltLockManager::OperationSource::kButton);
@@ -326,7 +266,7 @@ void AppTask::SwitchImagesDone()
 	chip::Server::GetInstance().ScheduleFactoryReset();
 }
 
-void AppTask::SwitchImagesEventHandler(const AppEvent &)
+void AppTask::SwitchImagesEventHandler()
 {
 	LOG_INF("Switching application from " CONFIG_APPLICATION_LABEL " to " CONFIG_APPLICATION_OTHER_LABEL);
 
@@ -344,25 +284,13 @@ void AppTask::SwitchImagesEventHandler(const AppEvent &)
 
 void AppTask::SwitchImagesTimerTimeoutCallback(k_timer *timer)
 {
-	if (!timer) {
-		return;
-	}
-
 	Instance().mSwitchImagesTimerActive = false;
-
-	AppEvent event;
-	event.Type = AppEventType::Timer;
-	event.Handler = SwitchImagesEventHandler;
-	PostEvent(event);
+	TaskExecutor::PostTask([] { SwitchImagesEventHandler() };);
 }
 
 void AppTask::SwitchImagesTriggerHandler(const AppEvent &event)
 {
-	if (event.ButtonEvent.PinNo != THREAD_WIFI_SWITCH_BUTTON) {
-		return;
-	}
-
-	if (event.ButtonEvent.Action == static_cast<uint8_t>(AppEventType::ButtonPushed) &&
+	if (event.ThreadWiFiSwitchEvent.ButtonAction == SwitchButtonAction::kButtonPressed &&
 	    !Instance().mSwitchImagesTimerActive) {
 		k_timer_start(&sSwitchImagesTimer, K_MSEC(kSwitchImagesTimeout), K_NO_WAIT);
 		Instance().mSwitchImagesTimerActive = true;
@@ -378,205 +306,11 @@ void AppTask::SwitchImagesTriggerHandler(const AppEvent &event)
 }
 #endif
 
-void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
-{
-	AppEvent button_event;
-	button_event.Type = AppEventType::Button;
-
-#if NUMBER_OF_BUTTONS == 2
-	if (BLE_ADVERTISEMENT_START_AND_LOCK_BUTTON_MASK & hasChanged) {
-		button_event.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_AND_LOCK_BUTTON;
-		button_event.ButtonEvent.Action = static_cast<uint8_t>(
-			(BLE_ADVERTISEMENT_START_AND_LOCK_BUTTON_MASK & buttonState) ? AppEventType::ButtonPushed :
-										       AppEventType::ButtonReleased);
-		button_event.Handler = StartBLEAdvertisementAndLockActionEventHandler;
-		PostEvent(button_event);
-	}
-#else
-	if (LOCK_BUTTON_MASK & buttonState & hasChanged) {
-		button_event.ButtonEvent.PinNo = LOCK_BUTTON;
-		button_event.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
-		button_event.Handler = LockActionEventHandler;
-		PostEvent(button_event);
-	}
-
-#ifdef CONFIG_THREAD_WIFI_SWITCHING
-	if (THREAD_WIFI_SWITCH_BUTTON_MASK & hasChanged) {
-		button_event.ButtonEvent.PinNo = THREAD_WIFI_SWITCH_BUTTON;
-		button_event.ButtonEvent.Action = static_cast<uint8_t>((THREAD_WIFI_SWITCH_BUTTON_MASK & buttonState) ?
-									       AppEventType::ButtonPushed :
-									       AppEventType::ButtonReleased);
-		button_event.Handler = SwitchImagesTriggerHandler;
-		PostEvent(button_event);
-	}
-#endif
-
-	if (BLE_ADVERTISEMENT_START_BUTTON_MASK & buttonState & hasChanged) {
-		button_event.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_BUTTON;
-		button_event.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
-		button_event.Handler = StartBLEAdvertisementHandler;
-		PostEvent(button_event);
-	}
-#endif
-
-	if (FUNCTION_BUTTON_MASK & hasChanged) {
-		button_event.ButtonEvent.PinNo = FUNCTION_BUTTON;
-		button_event.ButtonEvent.Action =
-			static_cast<uint8_t>((FUNCTION_BUTTON_MASK & buttonState) ? AppEventType::ButtonPushed :
-										    AppEventType::ButtonReleased);
-		button_event.Handler = FunctionHandler;
-		PostEvent(button_event);
-	}
-}
-
-void AppTask::FunctionTimerTimeoutCallback(k_timer *timer)
-{
-	if (!timer) {
-		return;
-	}
-
-	Instance().mFunctionTimerActive = false;
-	AppEvent event;
-	event.Type = AppEventType::Timer;
-	event.TimerEvent.Context = k_timer_user_data_get(timer);
-	event.Handler = FunctionTimerEventHandler;
-	PostEvent(event);
-}
-
-void AppTask::FunctionTimerEventHandler(const AppEvent &event)
-{
-	if (event.Type != AppEventType::Timer) {
-		return;
-	}
-
-	/* If we reached here, the button was held past kFactoryResetTriggerTimeout, initiate factory reset */
-	if (Instance().mFunction == FunctionEvent::SoftwareUpdate) {
-		LOG_INF("Factory Reset Triggered. Release button within %ums to cancel.", kFactoryResetTriggerTimeout);
-
-		/* Start timer for kFactoryResetCancelWindowTimeout to allow user to cancel, if required. */
-		Instance().StartTimer(kFactoryResetCancelWindowTimeout);
-		Instance().mFunction = FunctionEvent::FactoryReset;
-
-		/* Turn off all LEDs before starting blink to make sure blink is coordinated. */
-		sStatusLED.Set(false);
-#if NUMBER_OF_LEDS == 4
-		sFactoryResetLEDs.Set(false);
-#endif
-
-		sStatusLED.Blink(LedConsts::kBlinkRate_ms);
-#if NUMBER_OF_LEDS == 4
-		sFactoryResetLEDs.Blink(LedConsts::kBlinkRate_ms);
-#endif
-	} else if (Instance().mFunction == FunctionEvent::FactoryReset) {
-		/* Actually trigger Factory Reset */
-		Instance().mFunction = FunctionEvent::NoneSelected;
-		chip::Server::GetInstance().ScheduleFactoryReset();
-
-	} else if (Instance().mFunction == FunctionEvent::AdvertisingStart) {
-		/* The button was held past kAdvertisingTriggerTimeout, start BLE advertisement
-		   if we have 2 buttons UI*/
-#if NUMBER_OF_BUTTONS == 2
-		StartBLEAdvertisementHandler(event);
-		Instance().mFunction = FunctionEvent::NoneSelected;
-#endif
-	}
-}
-
-void AppTask::FunctionHandler(const AppEvent &event)
-{
-	if (event.ButtonEvent.PinNo != FUNCTION_BUTTON)
-		return;
-
-	/* To trigger software update: press the FUNCTION_BUTTON button briefly (< kFactoryResetTriggerTimeout)
-	 * To initiate factory reset: press the FUNCTION_BUTTON for kFactoryResetTriggerTimeout +
-	 * kFactoryResetCancelWindowTimeout All LEDs start blinking after kFactoryResetTriggerTimeout to signal factory
-	 * reset has been initiated. To cancel factory reset: release the FUNCTION_BUTTON once all LEDs start blinking
-	 * within the kFactoryResetCancelWindowTimeout.
-	 */
-	if (event.ButtonEvent.Action == static_cast<uint8_t>(AppEventType::ButtonPushed)) {
-		if (!Instance().mFunctionTimerActive && Instance().mFunction == FunctionEvent::NoneSelected) {
-			Instance().StartTimer(kFactoryResetTriggerTimeout);
-
-			Instance().mFunction = FunctionEvent::SoftwareUpdate;
-		}
-	} else {
-		/* If the button was released before factory reset got initiated, trigger a software update. */
-		if (Instance().mFunctionTimerActive && Instance().mFunction == FunctionEvent::SoftwareUpdate) {
-			Instance().CancelTimer();
-			Instance().mFunction = FunctionEvent::NoneSelected;
-
-#ifdef CONFIG_MCUMGR_TRANSPORT_BT
-			GetDFUOverSMP().StartServer();
-#else
-			LOG_INF("Software update is disabled");
-#endif
-		} else if (Instance().mFunctionTimerActive && Instance().mFunction == FunctionEvent::FactoryReset) {
-#if NUMBER_OF_LEDS == 4
-			sFactoryResetLEDs.Set(false);
-#endif
-			UpdateStatusLED();
-			Instance().CancelTimer();
-			Instance().mFunction = FunctionEvent::NoneSelected;
-			LOG_INF("Factory Reset has been Canceled");
-		}
-	}
-}
-
-void AppTask::StartBLEAdvertisementHandler(const AppEvent &)
-{
-	if (Server::GetInstance().GetFabricTable().FabricCount() != 0) {
-		LOG_INF("Matter service BLE advertising not started - device is already commissioned");
-		return;
-	}
-
-	if (ConnectivityMgr().IsBLEAdvertisingEnabled()) {
-		LOG_INF("BLE advertising is already enabled");
-		return;
-	}
-
-	if (Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow() != CHIP_NO_ERROR) {
-		LOG_ERR("OpenBasicCommissioningWindow() failed");
-	}
-}
-
-void AppTask::UpdateLedStateEventHandler(const AppEvent &event)
-{
-	if (event.Type == AppEventType::UpdateLedState) {
-		event.UpdateLedStateEvent.LedWidget->UpdateState();
-	}
-}
-
-void AppTask::LEDStateUpdateHandler(LEDWidget &ledWidget)
-{
-	AppEvent event;
-	event.Type = AppEventType::UpdateLedState;
-	event.Handler = UpdateLedStateEventHandler;
-	event.UpdateLedStateEvent.LedWidget = &ledWidget;
-	PostEvent(event);
-}
-
-void AppTask::UpdateStatusLED()
-{
-	/* Update the status LED.
-	 *
-	 * If IPv6 network and service provisioned, keep the LED On constantly.
-	 *
-	 * If the system has BLE connection(s) uptill the stage above, THEN blink the LED at an even
-	 * rate of 100ms.
-	 *
-	 * Otherwise, blink the LED for a very short time. */
-	if (sIsNetworkProvisioned && sIsNetworkEnabled) {
-		sStatusLED.Set(true);
-	} else if (sHaveBLEConnections) {
-		sStatusLED.Blink(LedConsts::StatusLed::Unprovisioned::kOn_ms,
-				 LedConsts::StatusLed::Unprovisioned::kOff_ms);
-	} else {
-		sStatusLED.Blink(LedConsts::StatusLed::Provisioned::kOn_ms, LedConsts::StatusLed::Provisioned::kOff_ms);
-	}
-}
-
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
+	bool isNetworkProvisioned = false;
+	bool isNetworkEnabled = false;
+
 	switch (event->Type) {
 	case DeviceEventType::kCHIPoBLEAdvertisingChange:
 #ifdef CONFIG_CHIP_NFC_COMMISSIONING
@@ -591,8 +325,9 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 			NFCMgr().StopTagEmulation();
 		}
 #endif
-		sHaveBLEConnections = ConnectivityMgr().NumBLEConnections() != 0;
-		UpdateStatusLED();
+		if(ConnectivityMgr().NumBLEConnections() != 0) {
+			GetBoard().UpdateDeviceState(DeviceState::kDeviceConnectedBLE);
+		}
 		break;
 #if defined(CONFIG_NET_L2_OPENTHREAD)
 	case DeviceEventType::kDnssdInitialized:
@@ -601,35 +336,27 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 		break;
 	case DeviceEventType::kThreadStateChange:
-		sIsNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
-		sIsNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
+		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
+		isNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
 #elif defined(CONFIG_CHIP_WIFI)
 	case DeviceEventType::kWiFiConnectivityChange:
-		sIsNetworkProvisioned = ConnectivityMgr().IsWiFiStationProvisioned();
-		sIsNetworkEnabled = ConnectivityMgr().IsWiFiStationEnabled();
+		isNetworkProvisioned = ConnectivityMgr().IsWiFiStationProvisioned();
+		isNetworkEnabled = ConnectivityMgr().IsWiFiStationEnabled();
 #if CONFIG_CHIP_OTA_REQUESTOR
 		if (event->WiFiConnectivityChange.Result == kConnectivity_Established) {
 			InitBasicOTARequestor();
 		}
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 #endif
-		UpdateStatusLED();
+		if (isNetworkEnabled && isNetworkProvisioned) {
+			GetBoard().UpdateDeviceState(DeviceState::kDeviceProvisioned);
+		} else {
+			GetBoard().UpdateDeviceState(DeviceState::kDeviceDisconnected);
+		}
 		break;
 	default:
 		break;
 	}
-}
-
-void AppTask::CancelTimer()
-{
-	k_timer_stop(&sFunctionTimer);
-	mFunctionTimerActive = false;
-}
-
-void AppTask::StartTimer(uint32_t timeoutInMs)
-{
-	k_timer_start(&sFunctionTimer, K_MSEC(timeoutInMs), K_NO_WAIT);
-	mFunctionTimerActive = true;
 }
 
 void AppTask::LockStateChanged(BoltLockManager::State state, BoltLockManager::OperationSource source)
@@ -637,21 +364,21 @@ void AppTask::LockStateChanged(BoltLockManager::State state, BoltLockManager::Op
 	switch (state) {
 	case BoltLockManager::State::kLockingInitiated:
 		LOG_INF("Lock action initiated");
-		sLockLED.Blink(50, 50);
+		GetBoard().GetLED(DeviceLeds::kAppLED).Blink(50, 50);
 #ifdef CONFIG_CHIP_NUS
 		GetNUSService().SendData("locking", sizeof("locking"));
 #endif
 		break;
 	case BoltLockManager::State::kLockingCompleted:
 		LOG_INF("Lock action completed");
-		sLockLED.Set(true);
+		GetBoard().GetLED(DeviceLeds::kAppLED).Set(true);
 #ifdef CONFIG_CHIP_NUS
 		GetNUSService().SendData("locked", sizeof("locked"));
 #endif
 		break;
 	case BoltLockManager::State::kUnlockingInitiated:
 		LOG_INF("Unlock action initiated");
-		sLockLED.Blink(50, 50);
+		GetBoard().GetLED(DeviceLeds::kAppLED).Blink(50, 50);
 #ifdef CONFIG_CHIP_NUS
 		GetNUSService().SendData("unlocking", sizeof("unlocking"));
 #endif
@@ -661,28 +388,12 @@ void AppTask::LockStateChanged(BoltLockManager::State state, BoltLockManager::Op
 #ifdef CONFIG_CHIP_NUS
 		GetNUSService().SendData("unlocked", sizeof("unlocked"));
 #endif
-		sLockLED.Set(false);
+		GetBoard().GetLED(DeviceLeds::kAppLED).Set(false);
 		break;
 	}
 
 	/* Handle changing attribute state in the application */
 	Instance().UpdateClusterState(state, source);
-}
-
-void AppTask::PostEvent(const AppEvent &event)
-{
-	if (k_msgq_put(&sAppEventQueue, &event, K_NO_WAIT) != 0) {
-		LOG_INF("Failed to post event to app task event queue");
-	}
-}
-
-void AppTask::DispatchEvent(const AppEvent &event)
-{
-	if (event.Handler) {
-		event.Handler(event);
-	} else {
-		LOG_INF("Event received with no handler. Dropping event.");
-	}
 }
 
 void AppTask::UpdateClusterState(BoltLockManager::State state, BoltLockManager::OperationSource source)
@@ -722,7 +433,7 @@ void AppTask::UpdateClusterState(BoltLockManager::State state, BoltLockManager::
 void AppTask::RegisterSwitchCliCommand()
 {
 	static const shell_command_t sSwitchCommand = { [](int, char **) {
-							       AppTask::Instance().SwitchImagesEventHandler(AppEvent{});
+							       AppTask::Instance().SwitchImagesEventHandler();
 							       return CHIP_NO_ERROR;
 						       },
 							"switch_images",
@@ -739,10 +450,8 @@ void AppTask::NUSLockCallback(void *context)
 	    BoltLockMgr().mState == BoltLockManager::State::kLockingInitiated) {
 		LOG_INF("Device is already locked");
 	} else {
-		AppEvent nus_event;
-		nus_event.Type = AppEventType::NUSCommand;
-		nus_event.Handler = LockActionEventHandler;
-		PostEvent(nus_event);
+		AppEvent nusEvent(AppEventType::NUSCommand);
+		TaskExecutor::PostTask([nusEvent] { LockActionEventHandler(nusEvent) };);
 	}
 }
 
@@ -753,10 +462,8 @@ void AppTask::NUSUnlockCallback(void *context)
 	    BoltLockMgr().mState == BoltLockManager::State::kUnlockingInitiated) {
 		LOG_INF("Device is already unlocked");
 	} else {
-		AppEvent nus_event;
-		nus_event.Type = AppEventType::NUSCommand;
-		nus_event.Handler = LockActionEventHandler;
-		PostEvent(nus_event);
+		AppEvent nusEvent(AppEventType::NUSCommand);
+		TaskExecutor::PostTask([nusEvent] { LockActionEventHandler(nusEvent) };);
 	}
 }
 #endif

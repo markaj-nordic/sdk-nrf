@@ -9,6 +9,8 @@
 #include <app/clusters/door-lock-server/door-lock-server.h>
 #include <lib/core/ClusterEnums.h>
 
+#include "app_event.h"
+
 #include <zephyr/kernel.h>
 
 #include <cstdint>
@@ -68,7 +70,7 @@ private:
 	void SetState(State state, OperationSource source);
 
 	static void ActuatorTimerEventHandler(k_timer *timer);
-	static void ActuatorAppEventHandler(const AppEvent &aEvent);
+	static void ActuatorAppEventHandler(const AppEvent &event);
 	friend BoltLockManager &BoltLockMgr();
 
 	State mState = State::kLockingCompleted;
