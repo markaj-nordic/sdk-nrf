@@ -8,28 +8,11 @@
 
 #include <cstdint>
 
-class LEDWidget;
+enum AppEventType : uint8_t { MeasurementsTimer, IdentifyTimer };
 
 struct AppEvent {
-	enum FunctionEventType : uint8_t {
-		FunctionPress,
-		FunctionRelease,
-		FunctionTimer,
-		MeasurementsTimer,
-		IdentifyTimer,
-	};
-
-	enum UpdateLedStateEventType : uint8_t { UpdateLedState = IdentifyTimer + 1 };
-
+	AppEvent(AppEventType type) { mType = type; }
 	AppEvent() = default;
 
-	explicit AppEvent(FunctionEventType type) : Type(type) {}
-
-	AppEvent(UpdateLedStateEventType type, LEDWidget *ledWidget) : Type(type), UpdateLedStateEvent{ ledWidget } {}
-
-	uint8_t Type;
-
-	struct {
-		LEDWidget *LedWidget;
-	} UpdateLedStateEvent;
+	AppEventType mType;
 };
