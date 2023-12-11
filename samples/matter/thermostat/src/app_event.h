@@ -8,38 +8,19 @@
 
 #include <cstdint>
 
-#include "event_types.h"
+enum class AppEventType : uint8_t { None = 0, TemperatureButton };
 
-class LEDWidget;
-
-enum class AppEventType : uint8_t {
-	None = 0,
-	Button,
-	ButtonPushed,
-	ButtonReleased,
-	Timer,
-	UpdateLedState,
-	IdentifyStart,
-	IdentifyStop,
-	Thermostat
-};
-
-enum class FunctionEvent : uint8_t { NoneSelected = 0, FactoryReset, SoftwareUpdate, AdvertisingStart };
+enum class TemperatureButtonAction : uint8_t { Pushed, Released };
 
 struct AppEvent {
+	AppEvent(AppEventType type) { mType = type; }
+	AppEvent() = default;
+
 	union {
 		struct {
-			uint8_t PinNo;
-			uint8_t Action;
-		} ButtonEvent;
-		struct {
-			void *Context;
-		} TimerEvent;
-		struct {
-			LEDWidget *LedWidget;
-		} UpdateLedStateEvent;
+			TemperatureButtonAction Action;
+		} TemperatureButtonEvent;
 	};
 
-	AppEventType Type{ AppEventType::None };
-	EventHandler Handler;
+	AppEventType mType{ AppEventType::None };
 };
