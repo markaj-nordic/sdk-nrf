@@ -34,7 +34,7 @@ public:
 	 *
 	 * ledStateHandler: User can register a custom callback for status LED behaviour,
 	 * and handle the indications of the device states in the specific way.
-	 * 
+	 *
 	 * @param buttonCallback the callback function for button interruption.
 	 * @param ledStateHandler
 	 * @return true if board components has been initialized successfully.
