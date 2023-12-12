@@ -7,3 +7,7 @@
 #pragma once
 
 /* ---- Light Switch App Config ---- */
+
+#ifndef SKIP_DEFERRED_BLE_ADV
+#define SKIP_DEFERRED_BLE_ADV 1
+#endif

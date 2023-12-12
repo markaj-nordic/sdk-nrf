@@ -243,13 +243,12 @@ void Board::FunctionHandler(const SystemEvent &event)
 
 void Board::StartBLEAdvertisementHandler(const SystemEvent &event)
 {
-#if NUMBER_OF_BUTTONS == 2
+#if NUMBER_OF_BUTTONS == 2 && !(SKIP_DEFERRED_BLE_ADV)
 	if (event.ButtonEvent.PinNo == FUNCTION_BUTTON) {
 		if (event.ButtonEvent.Action == static_cast<uint8_t>(SystemEventType::ButtonPushed)) {
 			StartBLEAdvertisement();
 		}
-	}
-	else if (event.ButtonEvent.Action == static_cast<uint8_t>(SystemEventType::ButtonPushed)) {
+	} else if (event.ButtonEvent.Action == static_cast<uint8_t>(SystemEventType::ButtonPushed)) {
 		sInstance.StartTimer(AdvertisingConsts::kAdvertisingTriggerTimeout);
 		sInstance.mFunction = SystemEventType::AdvertisingStart;
 	} else {

@@ -56,6 +56,7 @@ k_timer sDimmerTimer;
 Identify sIdentify = { kLightEndpointId, AppTask::IdentifyStartHandler, AppTask::IdentifyStopHandler,
 		       Clusters::Identify::IdentifyTypeEnum::kVisibleIndicator };
 bool sWasDimmerTriggered = false;
+bool sIsNetworkProvisioned = false;
 } /* namespace */
 
 #ifdef CONFIG_CHIP_WIFI
@@ -241,7 +242,6 @@ void AppTask::IdentifyStopHandler(Identify *)
 
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
-	bool isNetworkProvisioned = false;
 	bool isNetworkEnabled = false;
 
 	switch (event->Type) {
@@ -270,11 +270,11 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 		break;
 	case DeviceEventType::kThreadStateChange:
-		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
+		sIsNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
 		isNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
 #elif defined(CONFIG_CHIP_WIFI)
 	case DeviceEventType::kWiFiConnectivityChange:
-		isNetworkProvisioned = ConnectivityMgr().IsWiFiStationProvisioned();
+		sIsNetworkProvisioned = ConnectivityMgr().IsWiFiStationProvisioned();
 		isNetworkEnabled = ConnectivityMgr().IsWiFiStationEnabled();
 #if CONFIG_CHIP_OTA_REQUESTOR
 		if (event->WiFiConnectivityChange.Result == kConnectivity_Established) {
@@ -282,7 +282,7 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 		}
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 #endif
-		if (isNetworkEnabled && isNetworkProvisioned) {
+		if (isNetworkEnabled && sIsNetworkProvisioned) {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceProvisioned);
 		} else {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceDisconnected);
@@ -297,10 +297,17 @@ void AppTask::ButtonEventHandler(ButtonState state, ButtonMask hasChanged)
 {
 	AppEvent buttonEvent(AppEventType::Button);
 
-	if (APPLICATION_BUTTON_MASK & state & hasChanged) {
+/* For nRF7002 DK the Light Switch operations are allowed only if the device was commissioned to the Matter network */
+#if NUMBER_OF_BUTTONS == 2
+	bool additionalCondition = sIsNetworkProvisioned;
+#else
+	bool additionalCondition = true;
+#endif
+
+	if ((APPLICATION_BUTTON_MASK & state & hasChanged) && additionalCondition) {
 		buttonEvent.ButtonEvent.PinNo = APPLICATION_BUTTON;
 		TaskExecutor::PostTask([buttonEvent] { ButtonPushHandler(buttonEvent); });
-	} else if (APPLICATION_BUTTON_MASK & hasChanged) {
+	} else if ((APPLICATION_BUTTON_MASK & hasChanged) && additionalCondition) {
 		buttonEvent.ButtonEvent.PinNo = APPLICATION_BUTTON;
 		TaskExecutor::PostTask([buttonEvent] { ButtonReleaseHandler(buttonEvent); });
 	} else if (FUNCTION_BUTTON_MASK & hasChanged) {
