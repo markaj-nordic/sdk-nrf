@@ -8,7 +8,7 @@
 
 #include <cstdint>
 
-enum class AppEventType : uint8_t { None = 0, NUSCommand, LockEvent, ThreadWiFiSwitch };
+enum class AppEventType : uint8_t { None = 0, LockEvent, ThreadWiFiSwitch };
 enum class SwitchButtonAction : uint8_t { Pressed = 0, Released };
 
 struct AppEvent {

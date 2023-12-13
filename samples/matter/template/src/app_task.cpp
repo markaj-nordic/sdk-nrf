@@ -144,7 +144,6 @@ CHIP_ERROR AppTask::StartApp()
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
 	bool isNetworkProvisioned = false;
-	bool isNetworkEnabled = false;
 
 	switch (event->Type) {
 	case DeviceEventType::kCHIPoBLEAdvertisingChange:
@@ -159,19 +158,17 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 		break;
 	case DeviceEventType::kThreadStateChange:
-		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
-		isNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
+		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned() && ConnectivityMgr().IsThreadEnabled();
 #elif defined(CONFIG_CHIP_WIFI)
 	case DeviceEventType::kWiFiConnectivityChange:
-		isNetworkProvisioned = ConnectivityMgr().IsWiFiStationProvisioned();
-		isNetworkEnabled = ConnectivityMgr().IsWiFiStationEnabled();
+		isNetworkProvisioned = ConnectivityMgr().IsWiFiStationProvisioned() && ConnectivityMgr().IsWiFiStationEnabled();
 #if CONFIG_CHIP_OTA_REQUESTOR
 		if (event->WiFiConnectivityChange.Result == kConnectivity_Established) {
 			InitBasicOTARequestor();
 		}
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 #endif
-		if (isNetworkEnabled && isNetworkProvisioned) {
+		if (isNetworkProvisioned) {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceProvisioned);
 		} else {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceDisconnected);

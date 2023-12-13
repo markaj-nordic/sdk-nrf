@@ -12,8 +12,8 @@
 #include "led_widget.h"
 #include "system_event.h"
 
-enum class DeviceState : uint8_t { kDeviceDisconnected, kDeviceAdvertisingBLE, kDeviceConnectedBLE, kDeviceProvisioned };
-enum class DeviceLeds : uint8_t { kStatusLED, kAppLED, kUserLED1, kUserLED2 };
+enum DeviceState : uint8_t { kDeviceDisconnected, kDeviceAdvertisingBLE, kDeviceConnectedBLE, kDeviceProvisioned };
+enum DeviceLeds : uint8_t { kStatusLED, kAppLED, kUserLED1, kUserLED2 };
 
 using ButtonState = uint32_t;
 using ButtonMask = uint32_t;
@@ -36,7 +36,7 @@ public:
 	 * and handle the indications of the device states in the specific way.
 	 *
 	 * @param buttonCallback the callback function for button interruption.
-	 * @param ledStateHandler
+	 * @param ledStateHandler the custom callback for status LED behaviour.
 	 * @return true if board components has been initialized successfully.
 	 * @return false if an error occurred.
 	 */
@@ -62,6 +62,17 @@ public:
 	 */
 	void UpdateDeviceState(DeviceState state);
 
+	/**
+	 * @brief Get the current device state
+	 * 
+	 * This method returns the current device states as one of the following:
+	 * kDeviceDisconnected - the device is not connected to any network
+	 * kDeviceAdvertisingBLE - the device is not connected to any network, Bluetooth LE advertising is started
+	 * kDeviceConnectedBLE - the device is connected to the Matter controller via Bluetooth LE
+	 * kDeviceProvisioned - the device is connected to the Matter network.
+	 * 
+	 * @return DeviceState the current device state defined in @ref DeviceState enum
+	 */
 	DeviceState GetDeviceState(){ return sInstance.mState; }
 
 private:

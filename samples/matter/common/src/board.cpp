@@ -61,9 +61,11 @@ bool Board::Init(button_handler_t buttonHandler, LedStateHandler ledStateHandler
 
 void Board::UpdateDeviceState(DeviceState state)
 {
-	mState = state;
-	ResetAllLeds();
-	mLedStateHandler();
+	if (mState != state) {
+		mState = state;
+		ResetAllLeds();
+		mLedStateHandler();
+	}
 }
 
 void Board::ResetAllLeds()
@@ -243,6 +245,7 @@ void Board::FunctionHandler(const SystemEvent &event)
 
 void Board::StartBLEAdvertisementHandler(const SystemEvent &event)
 {
+#ifndef CUSTOM_BLUETOOTH_ADVERTISING
 #if NUMBER_OF_BUTTONS == 2 && !(SKIP_DEFERRED_BLE_ADV)
 	if (event.ButtonEvent.PinNo == FUNCTION_BUTTON) {
 		if (event.ButtonEvent.Action == static_cast<uint8_t>(SystemEventType::ButtonPushed)) {
@@ -262,6 +265,7 @@ void Board::StartBLEAdvertisementHandler(const SystemEvent &event)
 		StartBLEAdvertisement();
 	}
 #endif
+#endif /* CUSTOM_BLUETOOTH_ADVERTISING */
 }
 
 void Board::StartBLEAdvertisement()

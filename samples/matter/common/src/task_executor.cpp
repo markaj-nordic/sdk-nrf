@@ -11,13 +11,13 @@
 
 LOG_MODULE_DECLARE(app, CONFIG_CHIP_APP_LOG_LEVEL);
 
-constexpr size_t kEventQueueSize = 10;
+constexpr size_t kTaskQueueSize = CONFIG_APP_TASK_QUEUE_SIZE;
 
-K_MSGQ_DEFINE(sEventQueue, sizeof(TaskExecutor::Task), kEventQueueSize, alignof(TaskExecutor::Task));
+K_MSGQ_DEFINE(sTaskQueue, sizeof(TaskExecutor::Task), kTaskQueueSize, alignof(TaskExecutor::Task));
 
 void TaskExecutor::PostTask(const Task& task)
 {
-	if (k_msgq_put(&sEventQueue, &task, K_NO_WAIT) != 0) {
+	if (k_msgq_put(&sTaskQueue, &task, K_NO_WAIT) != 0) {
 		LOG_ERR("Failed to post event to app task event queue");
 	}
 }
@@ -25,6 +25,6 @@ void TaskExecutor::PostTask(const Task& task)
 void TaskExecutor::DispatchNextTask()
 {
 	Task task;
-	k_msgq_get(&sEventQueue, &task, K_FOREVER);
+	k_msgq_get(&sTaskQueue, &task, K_FOREVER);
 	task();
 }

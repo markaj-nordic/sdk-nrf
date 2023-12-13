@@ -285,12 +285,12 @@ void AppTask::SwitchImagesEventHandler()
 void AppTask::SwitchImagesTimerTimeoutCallback(k_timer *timer)
 {
 	Instance().mSwitchImagesTimerActive = false;
-	TaskExecutor::PostTask([] { SwitchImagesEventHandler() };);
+	TaskExecutor::PostTask([] { SwitchImagesEventHandler(); });
 }
 
 void AppTask::SwitchImagesTriggerHandler(const AppEvent &event)
 {
-	if (event.ThreadWiFiSwitchEvent.ButtonAction == SwitchButtonAction::kButtonPressed &&
+	if (event.ThreadWiFiSwitchEvent.ButtonAction == SwitchButtonAction::Pressed &&
 	    !Instance().mSwitchImagesTimerActive) {
 		k_timer_start(&sSwitchImagesTimer, K_MSEC(kSwitchImagesTimeout), K_NO_WAIT);
 		Instance().mSwitchImagesTimerActive = true;
@@ -309,7 +309,6 @@ void AppTask::SwitchImagesTriggerHandler(const AppEvent &event)
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
 	bool isNetworkProvisioned = false;
-	bool isNetworkEnabled = false;
 
 	switch (event->Type) {
 	case DeviceEventType::kCHIPoBLEAdvertisingChange:
@@ -325,7 +324,7 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 			NFCMgr().StopTagEmulation();
 		}
 #endif
-		if(ConnectivityMgr().NumBLEConnections() != 0) {
+		if (ConnectivityMgr().NumBLEConnections() != 0) {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceConnectedBLE);
 		}
 		break;
@@ -336,19 +335,18 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 		break;
 	case DeviceEventType::kThreadStateChange:
-		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
-		isNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
+		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned() && ConnectivityMgr().IsThreadEnabled();
 #elif defined(CONFIG_CHIP_WIFI)
 	case DeviceEventType::kWiFiConnectivityChange:
-		isNetworkProvisioned = ConnectivityMgr().IsWiFiStationProvisioned();
-		isNetworkEnabled = ConnectivityMgr().IsWiFiStationEnabled();
+		isNetworkProvisioned =
+			ConnectivityMgr().IsWiFiStationProvisioned() && ConnectivityMgr().IsWiFiStationEnabled();
 #if CONFIG_CHIP_OTA_REQUESTOR
 		if (event->WiFiConnectivityChange.Result == kConnectivity_Established) {
 			InitBasicOTARequestor();
 		}
 #endif /* CONFIG_CHIP_OTA_REQUESTOR */
 #endif
-		if (isNetworkEnabled && isNetworkProvisioned) {
+		if (isNetworkProvisioned) {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceProvisioned);
 		} else {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceDisconnected);
@@ -450,8 +448,7 @@ void AppTask::NUSLockCallback(void *context)
 	    BoltLockMgr().mState == BoltLockManager::State::kLockingInitiated) {
 		LOG_INF("Device is already locked");
 	} else {
-		AppEvent nusEvent(AppEventType::NUSCommand);
-		TaskExecutor::PostTask([nusEvent] { LockActionEventHandler(nusEvent) };);
+		TaskExecutor::PostTask([] { LockActionEventHandler(); });
 	}
 }
 
@@ -462,8 +459,7 @@ void AppTask::NUSUnlockCallback(void *context)
 	    BoltLockMgr().mState == BoltLockManager::State::kUnlockingInitiated) {
 		LOG_INF("Device is already unlocked");
 	} else {
-		AppEvent nusEvent(AppEventType::NUSCommand);
-		TaskExecutor::PostTask([nusEvent] { LockActionEventHandler(nusEvent) };);
+		TaskExecutor::PostTask([] { LockActionEventHandler(); });
 	}
 }
 #endif

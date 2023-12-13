@@ -243,7 +243,6 @@ void AppTask::ToggleMoveType()
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
 	bool isNetworkProvisioned = false;
-	bool isNetworkEnabled = false;
 
 	switch (event->Type) {
 	case DeviceEventType::kCHIPoBLEAdvertisingChange:
@@ -264,9 +263,8 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 		}
 		break;
 	case DeviceEventType::kThreadStateChange:
-		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
-		isNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
-		if (isNetworkEnabled && isNetworkProvisioned) {
+		isNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned() && ConnectivityMgr().IsThreadEnabled();
+		if (isNetworkProvisioned) {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceProvisioned);
 		} else {
 			GetBoard().UpdateDeviceState(DeviceState::kDeviceDisconnected);
