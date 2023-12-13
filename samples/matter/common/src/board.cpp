@@ -246,7 +246,7 @@ void Board::FunctionHandler(const SystemEvent &event)
 void Board::StartBLEAdvertisementHandler(const SystemEvent &event)
 {
 #ifndef CUSTOM_BLUETOOTH_ADVERTISING
-#if NUMBER_OF_BUTTONS == 2 && !(SKIP_DEFERRED_BLE_ADV)
+#if NUMBER_OF_BUTTONS == 2
 	if (event.ButtonEvent.PinNo == FUNCTION_BUTTON) {
 		if (event.ButtonEvent.Action == static_cast<uint8_t>(SystemEventType::ButtonPushed)) {
 			StartBLEAdvertisement();

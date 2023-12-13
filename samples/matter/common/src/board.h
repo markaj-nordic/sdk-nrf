@@ -73,7 +73,7 @@ public:
 	 * 
 	 * @return DeviceState the current device state defined in @ref DeviceState enum
 	 */
-	DeviceState GetDeviceState(){ return sInstance.mState; }
+	DeviceState GetDeviceState(){ return mState; }
 
 private:
 	Board() = default;
