@@ -66,8 +66,4 @@ private:
 #endif
 
 	bool mFunctionTimerActive = false;
-
-#if CONFIG_CHIP_FACTORY_DATA
-	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
-#endif
 };
