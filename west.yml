@@ -157,7 +157,7 @@ manifest:
       repo-path: sdk-connectedhomeip
       remote: markaj-nordic
       path: modules/lib/matter
-      revision: d758d49ea814b1a190ded770a49224b63193d53c
+      revision: 2a931d5f803e05d3e69ba9c3eb8f0213884f2541
       submodules:
         - name: nlio
           path: third_party/nlio/repo
