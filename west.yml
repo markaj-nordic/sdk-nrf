@@ -39,6 +39,8 @@ manifest:
       url-base: https://github.com/BabbleSim
     - name: bosch
       url-base: https://github.com/boschsensortec
+    - name: markaj-nordic
+      url-base: https://github.com/markaj-nordic
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -153,8 +155,9 @@ manifest:
       revision: 0a980137820ab08d267cce1daa93f003c0437854
     - name: matter
       repo-path: sdk-connectedhomeip
+      remote: markaj-nordic
       path: modules/lib/matter
-      revision: 4936f9fa2be9e6cd16b02e4fcb9a7aff611f4981
+      revision: 082e550f399a18b223a69760379d5755b224937b
       submodules:
         - name: nlio
           path: third_party/nlio/repo
