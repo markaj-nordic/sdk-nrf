@@ -41,6 +41,8 @@ manifest:
       url-base: https://github.com/boschsensortec
     - name: eembc
       url-base: https://github.com/eembc
+    - name: markaj-nordic
+      url-base: https://github.com/markaj-nordic
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -63,7 +65,8 @@ manifest:
     # https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/guides/modules.html
     - name: zephyr
       repo-path: sdk-zephyr
-      revision: b5cf3040298410845311ff7397374540d3451528
+      remote: markaj-nordic
+      revision: matter_test_ipv6
       import:
         # In addition to the zephyr repository itself, NCS also
         # imports the contents of zephyr/west.yml at the above
